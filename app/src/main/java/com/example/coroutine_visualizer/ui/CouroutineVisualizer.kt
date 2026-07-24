@@ -1,4 +1,4 @@
-package com.example.coroutine_visualizer
+package com.example.coroutine_visualizer.ui
 
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable

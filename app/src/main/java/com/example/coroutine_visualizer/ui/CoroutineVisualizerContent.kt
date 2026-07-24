@@ -1,4 +1,4 @@
-package com.example.coroutine_visualizer
+package com.example.coroutine_visualizer.ui
 
 import android.graphics.Bitmap
 import androidx.compose.animation.core.animateFloatAsState
@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 
 @Composable
 fun CoroutineVisualizerContent(
@@ -84,7 +85,7 @@ fun CoroutineVisualizerContent(
     val isStartEnabled = !hasStarted || (completedTargetsReached && completedAnimationsDrawn)
 
     LaunchedEffect(isApiCallPending, animLine1, progressLine1) {
-        val line1DrawingFinished = kotlin.math.abs(animLine1 - progressLine1) < 0.0001f
+        val line1DrawingFinished = abs(animLine1 - progressLine1) < 0.0001f
         if (isApiCallPending && line1DrawingFinished) {
             isApiCallPending = false
             onCallApi()
