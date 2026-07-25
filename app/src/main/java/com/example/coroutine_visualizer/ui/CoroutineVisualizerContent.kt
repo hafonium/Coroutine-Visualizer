@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,16 +38,24 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coroutine_visualizer.R
 import kotlin.math.abs
 
 @Composable
 fun CoroutineVisualizerContent(
+    useCoroutineMode: Boolean,
+    onToggleMode: (Boolean) -> Unit,
     progressLine1: Float,
     progressLine2: Float,
     progressLine3: Float,
+    threadLine1: String,
+    threadLine2: String,
+    threadLine3: String,
     thought1: String,
     thought2: String,
     thought3: String,
@@ -54,10 +63,10 @@ fun CoroutineVisualizerContent(
     isCallingApi: Boolean,
     packetProgress: Float,
     lineAnimationDurationMillis: Int,
-    packetAnimationDurationMillis: Int,
     onStartTasks: () -> Unit,
     onCallApi: () -> Unit
 ) {
+    // Smooth progress animation for each task line
     val animLine1 by animateFloatAsState(
         progressLine1,
         tween(lineAnimationDurationMillis),
@@ -73,17 +82,30 @@ fun CoroutineVisualizerContent(
         tween(lineAnimationDurationMillis),
         label = "line 3"
     )
-    val animPacket by animateFloatAsState(
-        packetProgress,
-        tween(packetAnimationDurationMillis),
-        label = "packet"
-    )
+
     var hasStarted by remember { mutableStateOf(false) }
     var isApiCallPending by remember { mutableStateOf(false) }
+
+    // Reset hasStarted when all lines return to 0 (e.g. on mode toggle or reset)
+    LaunchedEffect(progressLine1, progressLine2, progressLine3) {
+        if (progressLine1 == 0f && progressLine2 == 0f && progressLine3 == 0f) {
+            hasStarted = false
+        }
+    }
+
+    // Line completion check
+    val allLinesFinished = (progressLine1 >= 1f || progressLine1 == 0f) &&
+            (progressLine2 >= 1f || progressLine2 == 0f) &&
+            (progressLine3 >= 1f || progressLine3 == 0f)
+
+    // Mode toggle is enabled only when all lines and API call processes have finished
+    val isToggleEnabled = allLinesFinished && !isCallingApi && !isApiCallPending
+
     val completedTargetsReached = progressLine1 >= 1f && progressLine2 >= 1f
     val completedAnimationsDrawn = animLine1 >= 1f && animLine2 >= 1f
     val isStartEnabled = !hasStarted || (completedTargetsReached && completedAnimationsDrawn)
 
+    // Ensures Line 1 finishes drawing its current state before triggering API call
     LaunchedEffect(isApiCallPending, animLine1, progressLine1) {
         val line1DrawingFinished = abs(animLine1 - progressLine1) < 0.0001f
         if (isApiCallPending && line1DrawingFinished) {
@@ -93,14 +115,60 @@ fun CoroutineVisualizerContent(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Safe padding for device status bar
         Spacer(Modifier.height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding()))
 
-        Text("Coroutine Non-blocking Visualizer", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
 
+            Text(
+                "Coroutine Execution Visualizer",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        // Display current rendering UI Thread
+        Text(
+            text = "🖥️ UI Rendering on Thread: ${Thread.currentThread().name}",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.Gray
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // Mode Switcher Toggle
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                if (useCoroutineMode) "⚡ Coroutine Mode (Non-blocking)" else "⛔ Thread Blocking Mode",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (useCoroutineMode) Color(0xFF2E7D32) else Color(0xFFC62828)
+            )
+            Switch(
+                checked = useCoroutineMode,
+                enabled = isToggleEnabled, // Disabled until lines and requests finish
+                onCheckedChange = {
+                    hasStarted = false // Reset explicitly on toggle
+                    onToggleMode(it)
+                }
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Control Buttons
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
                 enabled = isStartEnabled,
@@ -113,9 +181,9 @@ fun CoroutineVisualizerContent(
             }
             Button(
                 enabled = progressLine1 > 0f &&
-                    progressLine1 < 1f &&
-                    !isCallingApi &&
-                    !isApiCallPending,
+                        progressLine1 < 1f &&
+                        !isCallingApi &&
+                        !isApiCallPending,
                 onClick = {
                     isApiCallPending = true
                 }
@@ -124,22 +192,22 @@ fun CoroutineVisualizerContent(
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            LineItem("Line 1 (UI Thread / Suspending)", animLine1, Color(0xFF1976D2), thought1)
-            LineItem("Line 2 (Worker Thread 1)", animLine2, Color(0xFF388E3C), thought2)
-            LineItem("Line 3 (Tapping Released Thread)", animLine3, Color(0xFFD81B60), thought3)
+            LineItem("Line 1 (Worker Thread / Suspending)", threadLine1, animLine1, Color(0xFF1976D2), thought1)
+            LineItem("Line 2 (Worker Thread)", threadLine2, animLine2, Color(0xFF388E3C), thought2)
+            LineItem("Line 3 (Worker Thread)", threadLine3, animLine3, Color(0xFFD81B60), thought3)
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
         if (isCallingApi) {
-            PacketAnimation(animPacket)
+            PacketAnimation(packetProgress)
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         catBitmap?.let { CatResponse(it) }
     }
 }
@@ -148,18 +216,20 @@ fun CoroutineVisualizerContent(
 private fun PacketAnimation(progress: Float) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
     ) {
-        Column(Modifier.padding(12.dp)) {
+        Column(Modifier.padding(10.dp)) {
             Text(
                 if (progress < 0.8f) "✉️ Sending Request to Server..."
                 else "📦 Returning Response Payload...",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(Modifier.height(8.dp))
-            Canvas(Modifier.fillMaxWidth().height(12.dp)) {
-                val yOffset = 6.dp.toPx()
+            Spacer(Modifier.height(6.dp))
+            Canvas(Modifier.fillMaxWidth().height(10.dp)) {
+                val yOffset = 5.dp.toPx()
                 drawLine(
                     Color.LightGray,
                     Offset(0f, yOffset),
@@ -168,8 +238,8 @@ private fun PacketAnimation(progress: Float) {
                 )
                 drawCircle(
                     if (progress < 0.8f) Color(0xFFFF9800) else Color(0xFF4CAF50),
-                    8.dp.toPx(),
-                    Offset(size.width * progress, yOffset)
+                    6.dp.toPx(),
+                    Offset(size.width * progress.coerceIn(0f, 1f), yOffset)
                 )
             }
         }
@@ -183,16 +253,16 @@ private fun CatResponse(bitmap: Bitmap) {
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("🐱 Response Payload Received:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Spacer(Modifier.height(8.dp))
+            Text("🐱 Response Payload Received:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
             Image(
                 bitmap = bitmap.asImageBitmap(),
-                contentDescription = "Cat Image",
+                contentDescription = "Cat Image Response",
                 modifier = Modifier
-                    .size(160.dp)
+                    .size(140.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
             )
@@ -201,25 +271,35 @@ private fun CatResponse(bitmap: Bitmap) {
 }
 
 @Composable
-private fun LineItem(label: String, progress: Float, color: Color, thought: String) {
+private fun LineItem(
+    label: String,
+    threadName: String,
+    progress: Float,
+    color: Color,
+    thought: String
+) {
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Text("${(progress * 100).toInt()}%", fontSize = 12.sp, color = Color.Gray)
         }
+
+        // Render actual system thread name running the task
+        Text("🧵 Thread: $threadName", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF00838F))
+
         Text("💬 $thought", fontSize = 12.sp, color = Color(0xFF555555))
         Spacer(Modifier.height(4.dp))
-        Canvas(Modifier.fillMaxWidth().height(16.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(14.dp)) {
             drawRoundRect(
                 Color.LightGray.copy(alpha = 0.3f),
                 size = Size(size.width, size.height),
-                cornerRadius = CornerRadius(8.dp.toPx())
+                cornerRadius = CornerRadius(7.dp.toPx())
             )
             if (progress > 0f) {
                 drawRoundRect(
                     color,
                     size = Size(size.width * progress.coerceIn(0f, 1f), size.height),
-                    cornerRadius = CornerRadius(8.dp.toPx())
+                    cornerRadius = CornerRadius(7.dp.toPx())
                 )
             }
         }
