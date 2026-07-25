@@ -1,4 +1,4 @@
-# 🚀 Coroutine Non-blocking Visualizer
+# 🚀 Coroutine Execution Visualizer
 
 An interactive Android application built with **Jetpack Compose** and **Kotlin Coroutines** to visualize non-blocking UI behavior, suspend functions, and thread management during API calls.
 
